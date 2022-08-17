@@ -70,6 +70,13 @@ typedef enum TRF796XMODE {
 
 } TRF796XMode;
 
+typedef struct TRF790XTYPE {
+
+    TRF7960 = 0x0,
+    TRF7963 = 0x1
+
+} TRF796XType;
+
 /// An enumerated type for all of the internal addresses
 typedef enum TRF796XADDRESS {
 
@@ -124,13 +131,35 @@ typedef struct TRF796XCONFIG {
     uint32_t (write)(const void* const data, const uint32_t size);         ///< Function to Write to the Device, either SPI or Parallel Interface depending on the usespi flag
     uint32_t (read)(void* const data, const uint32_t size);                ///< Function to Read from the Device, either SPI or Parallel Interface depending on the usespi flag
 
-    void (*delay)(const uint16_t useconds);                                     ///< Function to Delay the MCU Until 
+    void (*delay)(const uint16_t useconds);                                ///< Function to Delay the MCU Until 
 
     bool usespi;        ///< Whether or not to use SPI to communicate 
 
-    TRF796XMode mode;   ///< The Mode of Operation Between The ISO Standards and being a remote
+    TRF796XMode mode;       ///< The Mode of Operation Between The ISO Standards and being a remote
+    TRF796XType devicetype; ///< The Specific Submodel of the device
 
 } TRF796XConfig;
+
+/// Runtime data for the chip, all of the flags and other information
+typedef struct TRF796XDATA {
+
+    volatile bool rx_started;   ///< If the Reception has started
+    volatile bool no_response;  ///< If there was no response detected within the time frame specified
+    volatile bool tx_done;      ///< If the transmission is done
+    volatile bool fifo_full;    ///< If the FIFO buffer is full (>9 bytes)
+    volatile bool fifo_empty;   ///< If the FIFO buffer is empty (<3 bytes)
+    volatile bool fifo_overflow;///< If the FIFO is overfilled
+    volatile uint8_t fifo_size; ///< How many elements are in the FIFO buffer currently
+
+} TRF796XData;
+
+/// A Device With the Device Specific Data, aka runtime flags and information
+typedef struct TRF796X {
+
+    TRF796XConfig config;   ///< The configuration data for the physical interface
+    TRF796XData data;       ///< The runtime data and flags for transmission and stuff
+
+} TRF796X;
 
 // -------------------- Init and Deinit Functions ------------------- //
 
@@ -138,156 +167,183 @@ typedef struct TRF796XCONFIG {
  * \brief Configures and sets up the TRF796X 
  * 
  * \param[in] config: The Configuration to set up the TRF796X
+ * \param[in] dev: Device to Initialize
+ * 
+ * \returns TRF796X*: The Inited device address, NULL if there is an issue with the init
  */
-void TRF796XInit(const TRF796XConfig* const config);
-
+TRF796X* TRF796XInit(TRF796X* const dev, const TRF796XConfig* const config);
 
 /**
  * \brief Deinitializes all of the buffers and such of the peripheral
  * 
+ * \param[in] dev: Device to Deinitialize
+ * 
  */
-void TRFDeinit();
+void TRFDeinit(TRF796X* const dev);
 
 // ------------------------ Interrupt Functions ------------------------ //
 
 /**
  * \brief Enables the Interrupt That is given, enums are IRQ_*
  * 
- * \param[in] irq: Interupt Bit Mask to Set 
+ * \param[in] dev: Device to enable the interrupt for 
+ * \param[in] irq: Interrupt Bit Mask to Set 
  */
-void TRF796XEnableInterrupt(const TRF796XInterrupt irq);
+void TRF796XEnableInterrupt(const TRF796X* const dev, const TRF796XInterrupt irq);
 
 /**
  * \brief Reads the Interrupt Status Register and Returns the value
  * 
+ * \param[in] dev: Device to read the interrupt status of
+ * 
  * \return uint8_t: The Value of the Interrupt Status Register
  */
-uint8_t TRF796XReadInterruptStatus();
+uint8_t TRF796XReadInterruptStatus(const TRF796X* const dev);
 
 /**
  * \brief Enables Multiple Interrupts at Once 
  * 
+ * \param[in] dev: Device to Enable the Interrupts for
  * \param[in] irqmask: Mask of the Interrupts to set, see \ref TRF796XInterrupt, or'd interrupt bit masks
  */
-void TRF796XEnableInterrupts(const uint8_t irqmask);
+void TRF796XEnableInterrupts(const TRF796X* const dev, const uint8_t irqmask);
 
 /**
  * \brief The Interrupt Service Routine for The Device, Manages all of the Flags and Cleanup
  * 
+ * \param[in] dev: Device to run the interrupt for
+ * 
  */
-void TRF796XISR(void);
+void TRF796XISR(const TRF796X* const dev);
 
 // ------------------- Basic State Setting Functions ------------------- //
 
 /**
  * \brief Enables or Disables the Device via the EN Pin
  * 
+ * \param[in] dev: Device to Enable or Disable
  * \param[in] state: Whether the device is Enabled
  */
-void TRF796XEnable(const bool state);
+void TRF796XEnable(const TRF796X* const dev, const bool state);
 
 /**
  * \brief Does a software reset of the TRF96X
  * 
+ * \param[in] dev: Device to Reset
+ * 
  */
-void TRF796XReset();
+void TRF796XReset(const TRF796X* const dev);
 
 /**
  * \brief Turns on or off the RF Transceiver
  * 
+ * \param[in] dev: Device to Enable or Disable the RF Transceiver for
  * \param[in] state: The State of the RF Transceiver we want to write
  */
-void TRF796XSetRFState(const bool state);
+void TRF796XSetRFState(const TRF796X* const dev, const bool state);
 
 // -------------------- Basic Chip Reading and Writing Functions ----------------- //
 
 /**
  * \brief Writes a command To the Device see \ref TRF796XCommand
  * 
+ * \param[in] dev: Device to Write a Command To
  * \param[in] command: Command to write to the device
  * 
  * \returns uint8_t: How many bytes were written, 0 for error
  */
-uint8_t TRF796XWriteCommand(const TRF796XCommand command);
+uint8_t TRF796XWriteCommand(const TRF796X* const dev, const TRF796XCommand command);
 
 /**
  * \brief Writes to the device starting at an address and continuing
  * 
+ * \param[in] dev: Device to write to
  * \param[in] addr: Base Address to Start Writing from
  * \param[in] data: The data to write to the address and beyond
  * \param[in] size: How many bytes to write
  * 
  * \returns uint8_t: How many bytes were written, zero for error
  */
-uint8_t TRF796XWrite(const TRF796XAddress addr, const void* const data, const uint8_t size);
+uint8_t TRF796XWrite(const TRF796X* const dev, const TRF796XAddress addr, const void* const data, const uint8_t size);
 
 /**
  * \brief Write a single byte to the device at a given address
  * 
+ * \param[in] dev: Device to write a byte to
  * \param[in] addr: The Address to Write to see \ref TRF796XAddress
  * \param[in] value: The value to write at that address
  * 
  * \returns uint8_t: The Number of Bytes Written
  */
-uint8_t TRF796XWriteByte(const TRF796XAddress addr, const uint8_t value);
+uint8_t TRF796XWriteByte(const TRF796X* const dev, const TRF796XAddress addr, const uint8_t value);
 
 /**
- * \brief Uses the CS Pin to Select the Device for Writing and Reading
+ * \brief Uses the CS Pin to Select the Device for Writing and Reading Only Applies if using spi
+ * 
+ * \param[in] dev: The Device to Select
+ * \param[in] state: Whether or Not to Select the Device
  * 
  */
-void TRF796XSelect(const bool state);
+void TRF796XSelect(const TRF796X* const dev, const bool state);
 
 /**
  * \brief Read from the device at a given address
  * 
+ * \param[in] dev: Device to Read from
  * \param[in] addr: Address to read from
  * \param[out] data: Buffer to write to
  * \param[in] size: Number of Bytes to Read
  * 
  * \returns uint8_t: The Number of Read Bytes
  */
-uint8_t TRF796XRead(const TRF796XAddress addr, void* const data, const uint8_t size);
+uint8_t TRF796XRead(const TRF796X* const dev, const TRF796XAddress addr, void* const data, const uint8_t size);
 
 // ---------------------- Basic Transmission and Reception Functions -------------------- //
 
 /**
  * \brief Transmit a buffer using the RF Communication protocol
  * 
+ * \param[in] dev: Device to transmit From
  * \param[in] data: Buffer to send
  * \param[in] size: How Many Bytes to Send from the Buffer
+ * 
+ * \returns uint16_t: The Number of bytes that were transmitted, 0 if error
  */
-uint16_t TRF796XTransmit(const void* const data, const uint16_t size, const bool withcrc);
+uint16_t TRF796XTransmit(TRF796X* const dev, const void* const data, const uint16_t size, const bool withcrc);
 
 /**
  * \brief Transmits A Number of Bits using RF
  * 
+ * \param[in] dev: Device to transmit from
  * \param[in] data: Buffer to Transmit from
  * \param[in] bits: The Number of Bits to Send
  * \param[in] withcrc: If we want to transmit with CRC
  * 
  * \returns uint16_t: The Number of Bits that were successfully transmitted 
  */
-uint16_t TRF796XTransmitBits(const void* const data, const uint16_t bits, const bool withcrc);
+uint16_t TRF796XTransmitBits(TRF796X* const dev, const void* const data, const uint16_t bits, const bool withcrc);
 
 /**
  * \brief Receive Bytes from the Antenna, first waiting for anything to come in
  * 
+ * \param[in] dev: Device to receive to
  * \param[out] data: The Buffer to Write to
  * \param[in] size: How many bytes to receive, hopefully
  * \param[in] withcrc: If we want to verify with CRC
  * 
  * \returns uint16_t: The number of bytes that were actually received, 0 for error
  */
-uint16_t TRF796XReceive(void* const data, const uint16_t size, const bool withcrc);
+uint16_t TRF796XReceive(TRF796X* const dev, void* const data, const uint16_t size, const bool withcrc);
 
 /**
  * \brief Receive a number of Bits from the System Transmitted by a Tag or another reader
  * 
+ * \param[in] dev: The Device to Receive to
  * \param[out] data: The Buffer to Receive To
  * \param[in] bits: How many bits we want to receive
  * \param[in] withcrc: If we want to verify reception with CRC
  * 
  * \returns uint16_t: The Number of Bits that were actually received before a stop condition or timeout
  */
-uint16_t TRF796XReceieveBits(void* const data, const uint16_t bits, const bool withcrc);
+uint16_t TRF796XReceieveBits(TRF796X* const dev, void* const data, const uint16_t bits, const bool withcrc);
 

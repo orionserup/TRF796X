@@ -84,4 +84,4 @@ Once the initialization struct has been filled with the necessary fields and is 
 
 After that you want to setup an interrupt on the irq pin, have the Interrupt Service Routine for that pin call `TRF796XISR();`
 
-After that everything should be ready to go, see the API Guide for the rest of the information. 
+After that everything should be ready to go, see the API Guide for the rest of the information.  
