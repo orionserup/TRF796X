@@ -1,7 +1,7 @@
 /**
  * \file TRF796X.h
  * \author Orion Serup (orionserup@gmail.com)
- * \brief 
+ * \brief Contains the declarations and Prototypes for the TRF796X Functionality
  * \version 0.1
  * \date 2022-08-09
  * 
@@ -24,6 +24,7 @@ typedef enum TRF796XCOMMAND {
     RESET_FIFO = 0xF,       ///< Clears the FIFO
     TX_WO_CRC = 0x10,       ///< Transmit without CRC
     TX_W_CRC = 0x11,        ///< Transmit with CRC
+    EOF_TX_NXT_TS = 0x14,   ///< End of Frame / Transmit Next Time Slot
     BLOCK_RX = 0x16,        ///< Block the Reception of Data
     EN_RX = 0x17,           ///< Enable The Reception of Data
     TEST_INT_RF = 0x18,     ///< Test the Internal RF
@@ -52,8 +53,15 @@ typedef enum TRF796XINT {
 
 typedef enum TRF796XMODE {
 
-    FELICA_212k = 0x1A,     ///< FeLiCa Spec Running at 212kbps
-    FELICA_424k = 0x1B,     ///< FeLiCa Spec Running at 424kbps
+    ISO_15693_6k62_S4       = 0x00, ///< ISO15693 6.62 kbps Single Subcarrier and 1 out of 4 modulation
+    ISO_15693_6k62_S256     = 0x01, ///< ISO15693 6.62 kbps Single Subcarrier and 1 out of 256 modulation
+    ISO_15693_26k48_S4      = 0x02, ///< ISO15693 26.48 kbps Single Subcarrier and 1 out of 4 modulation
+    ISO_15693_26k48_S256    = 0x03, ///< ISO15693 26.48 kbps Single Subcarrier and 1 out of 256 modulation
+    
+    ISO_15693_6k67_D4       = 0x04, ///< ISO15693 6.67 kbps Double Subcarrier and 1 out of 4 modulation
+    ISO_15693_6k67_D256     = 0x05, ///< ISO15693 6.67 kpbs Double Subcarrier and 1 out of 4 modulation
+    ISO_15693_26k69_D4      = 0x06, ///< ISO15693 26.69 kbps Double Subcarrier and 1 out of 4 modulation
+    ISO_15693_26k69_D256    = 0x07, ///< ISO15693 26.69 kbps Double Subcarrier and 1 out of 256 Modulation
 
     ISO_14443A_106k = 0x08, ///< ISO14443A Spec Running at 106kbps
     ISO_14443A_212k = 0x09, ///< ISO14443A Spec Running at 212kbps
@@ -65,15 +73,23 @@ typedef enum TRF796XMODE {
     ISO_14443B_424k = 0x0E, ///< ISO14443B Spec Running at 424kbps
     ISO_14443B_848k = 0x0F, ///< ISO14443B Spec Running at 848kbps
 
-    DIRECT0 = 0,            ///< Read Directly From the Analog Front End
-    DIRECT1 = 1             ///< Read Decoded Data without Application Framing
+    TAG_IT = 0x12,          ///< Tag-It Spec
+
+    FELICA_212k = 0x1A,     ///< FeLiCa Spec Running at 212kbps
+    FELICA_424k = 0x1B,     ///< FeLiCa Spec Running at 424kbps
+
+    DIRECT0 = 0xFE,         ///< Read Directly From the Analog Front End
+    DIRECT1 = 0xFF          ///< Read Decoded Data without Application Framing
 
 } TRF796XMode;
 
-typedef struct TRF790XTYPE {
+typedef enum TRF790XTYPE {
 
-    TRF7960 = 0x0,
-    TRF7963 = 0x1
+    TRF7960 = 0x0,  ///< Using the TRF7960 Chip
+    TRF7961 = 0x1,  ///< Using the TRF7961 Chip
+    TRF7962 = 0x2,  ///< Using the TRF7962 Chip
+    TRF7963 = 0x3,  ///< Using the TRF7963 Chip
+    TRF7964 = 0x4   ///< Using the TRF7964 Chip
 
 } TRF796XType;
 
@@ -105,6 +121,8 @@ typedef enum TRF796XADDRESS {
 
     // FIFO Registers //
 
+    ADJ_FIFO_IRQ = 0x14,    ///< Adjust the FIFO IRQ Levels
+
     TEST1 = 0x1A,           ///< First Test Register
     TEST2 = 0x1B,           ///< Second Test Register
     FIFO_STAT = 0x1C,       ///< FIFO Status Regitster
@@ -128,28 +146,31 @@ typedef struct TRF796XCONFIG {
     int en2_gpio;       ///< The GPIO for the second Enable Pin
     int cs_gpio;        ///< The GPIO for the Chip Select for the SPI Peripheral
 
-    uint32_t (write)(const void* const data, const uint32_t size);         ///< Function to Write to the Device, either SPI or Parallel Interface depending on the usespi flag
-    uint32_t (read)(void* const data, const uint32_t size);                ///< Function to Read from the Device, either SPI or Parallel Interface depending on the usespi flag
+    uint32_t (*write)(const void* const data, const uint32_t size);         ///< Function to Write to the Device, either SPI or Parallel Interface depending on the usespi flag
+    uint32_t (*read)(void* const data, const uint32_t size);                ///< Function to Read from the Device, either SPI or Parallel Interface depending on the usespi flag
 
     void (*delay)(const uint16_t useconds);                                ///< Function to Delay the MCU Until 
 
-    bool usespi;        ///< Whether or not to use SPI to communicate 
+    bool usespi;            ///< Whether or not to use SPI to communicate 
 
     TRF796XMode mode;       ///< The Mode of Operation Between The ISO Standards and being a remote
-    TRF796XType devicetype; ///< The Specific Submodel of the device
+    TRF796XType type;       ///< The Specific Submodel of the device
 
 } TRF796XConfig;
 
 /// Runtime data for the chip, all of the flags and other information
 typedef struct TRF796XDATA {
 
-    volatile bool rx_started;   ///< If the Reception has started
-    volatile bool no_response;  ///< If there was no response detected within the time frame specified
-    volatile bool tx_done;      ///< If the transmission is done
-    volatile bool fifo_full;    ///< If the FIFO buffer is full (>9 bytes)
-    volatile bool fifo_empty;   ///< If the FIFO buffer is empty (<3 bytes)
-    volatile bool fifo_overflow;///< If the FIFO is overfilled
-    volatile uint8_t fifo_size; ///< How many elements are in the FIFO buffer currently
+    volatile bool rx_started;       ///< If the Reception has started
+    volatile bool no_response;      ///< If there was no response detected within the time frame specified
+    volatile bool tx_done;          ///< If the transmission is done
+    volatile bool fifo_overflow;    ///< If the FIFO is overfilled
+    volatile bool fifo_error;       ///< If the FIFO is Almost Empty or Almost Full
+    volatile bool crc_error;        ///< There was an issue with CRC, only if Receiving with CRC
+    volatile bool collision_error;  ///< More than 6 or 7 collisions Detected
+    volatile bool framing_error;    ///< There was an issue with packet framing
+    volatile uint8_t fifo_size;     ///< How many elements are in the FIFO buffer currently
+    uint8_t fifo_max_size;          ///< Whats the max number of bytes that can be filled into the fifo
 
 } TRF796XData;
 
@@ -209,12 +230,28 @@ uint8_t TRF796XReadInterruptStatus(const TRF796X* const dev);
 void TRF796XEnableInterrupts(const TRF796X* const dev, const uint8_t irqmask);
 
 /**
+ * \brief Disables the Given Interrupts in bitmask form
+ * 
+ * \param[in] dev: Device to Disable Interrupts On
+ * \param[in] irq_mask: Interrupts to disable in bit mask form 
+ */
+void TRF796XDisableInterrupts(const TRF796X* const dev, const uint8_t irq_mask);
+
+/**
+ * \brief Disables an Interrupt on the device
+ * 
+ * \param[in] dev: Device to disable the Interrupt for
+ * \param[in] irq: The Interrupt to disable, see \ref TRF796XInterrupt
+ */
+void TRF796XDisableInterrupt(const TRF796X* const dev, const TRF796XInterrupt irq);
+
+/**
  * \brief The Interrupt Service Routine for The Device, Manages all of the Flags and Cleanup
  * 
  * \param[in] dev: Device to run the interrupt for
  * 
  */
-void TRF796XISR(const TRF796X* const dev);
+void TRF796XISR(TRF796X* const dev);
 
 // ------------------- Basic State Setting Functions ------------------- //
 
@@ -225,6 +262,15 @@ void TRF796XISR(const TRF796X* const dev);
  * \param[in] state: Whether the device is Enabled
  */
 void TRF796XEnable(const TRF796X* const dev, const bool state);
+
+/**
+ * \brief Uses the CS Pin to Select the Device for Writing and Reading Only Applies if using spi
+ * 
+ * \param[in] dev: The Device to Select
+ * \param[in] state: Whether or Not to Select the Device
+ * 
+ */
+void TRF796XSelect(const TRF796X* const dev, const bool state);
 
 /**
  * \brief Does a software reset of the TRF96X
@@ -278,15 +324,6 @@ uint8_t TRF796XWrite(const TRF796X* const dev, const TRF796XAddress addr, const 
 uint8_t TRF796XWriteByte(const TRF796X* const dev, const TRF796XAddress addr, const uint8_t value);
 
 /**
- * \brief Uses the CS Pin to Select the Device for Writing and Reading Only Applies if using spi
- * 
- * \param[in] dev: The Device to Select
- * \param[in] state: Whether or Not to Select the Device
- * 
- */
-void TRF796XSelect(const TRF796X* const dev, const bool state);
-
-/**
  * \brief Read from the device at a given address
  * 
  * \param[in] dev: Device to Read from
@@ -297,6 +334,15 @@ void TRF796XSelect(const TRF796X* const dev, const bool state);
  * \returns uint8_t: The Number of Read Bytes
  */
 uint8_t TRF796XRead(const TRF796X* const dev, const TRF796XAddress addr, void* const data, const uint8_t size);
+
+/**
+ * \brief 
+ * 
+ * \param dev
+ * \param addr
+ * \return uint8_t 
+ */
+uint8_t TRF796XReadByte(const TRF796X* const dev, const TRF796XAddress addr);
 
 // ---------------------- Basic Transmission and Reception Functions -------------------- //
 
