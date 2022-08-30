@@ -323,7 +323,7 @@ static uint16_t TRF796XReceieveBytes(const TRF796X* const dev, void* const data,
         uint16_t size = index + dev->data.fifo_size > bytes? bytes - (index + dev->data.fifo_size): dev->data.fifo_size;
         
         if(size != 0 && index < bytes)
-            TRF796XRead(dev, data + index, size);
+            TRF796XRead(dev, FIFO_IO, data + index, size);
 
         index += dev->data.fifo_size;
 
@@ -342,7 +342,7 @@ uint16_t TRF796XReceive(TRF796X* const dev, void* const data, const uint16_t siz
     if(dev->data.no_response)
         return 0;
 
-    
+    return 0;
 
 
 }
@@ -350,6 +350,8 @@ uint16_t TRF796XReceive(TRF796X* const dev, void* const data, const uint16_t siz
 uint16_t TRF796XReceiveBits(TRF796X* const dev, void* const data, const uint16_t size, const bool withcrc) {
 
     assert(dev && data && size);
+
+    return 0;
 
 }
 
